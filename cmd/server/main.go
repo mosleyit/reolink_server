@@ -107,7 +107,27 @@ func main() {
 		zap.String("recording_repo", "ready"),
 		zap.String("user_repo", "ready"))
 
-	// TODO: Load cameras from database into camera manager
+	// Load cameras from database into camera manager
+	cameras, err := cameraRepo.List(ctx)
+	if err != nil {
+		logger.Warn("Failed to load cameras from database", zap.Error(err))
+	} else {
+		loadedCount := 0
+		for _, camera := range cameras {
+			if err := cameraManager.AddCamera(ctx, camera); err != nil {
+				logger.Error("Failed to add camera to manager",
+					zap.Error(err),
+					zap.String("camera_id", camera.ID),
+					zap.String("camera_name", camera.Name))
+			} else {
+				loadedCount++
+			}
+		}
+		logger.Info("Cameras loaded from database",
+			zap.Int("total", len(cameras)),
+			zap.Int("loaded", loadedCount),
+			zap.Int("failed", len(cameras)-loadedCount))
+	}
 
 	// Create event processor adapter for the router
 	type eventProcessorAdapter struct {
@@ -123,6 +143,7 @@ func main() {
 		Config:         cfg,
 		CameraManager:  cameraManager,
 		EventProcessor: adapter,
+		DB:             database.DB,
 		CameraRepo:     cameraRepo,
 		EventRepo:      eventRepo,
 		RecordingRepo:  recordingRepo,
@@ -183,7 +204,12 @@ func main() {
 		logger.Error("Failed to shutdown camera manager", zap.Error(err))
 	}
 
-	// TODO: Close database connection
+	// Close database connection
+	if err := database.Close(); err != nil {
+		logger.Error("Failed to close database connection", zap.Error(err))
+	} else {
+		logger.Info("Database connection closed")
+	}
 
 	logger.Info("Server stopped")
 }

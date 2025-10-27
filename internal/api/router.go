@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"time"
 
@@ -33,6 +34,7 @@ type RouterDependencies struct {
 	Config         *config.Config
 	CameraManager  *camera.Manager
 	EventProcessor service.EventProcessor
+	DB             *sql.DB
 	CameraRepo     *repository.CameraRepository
 	EventRepo      *repository.EventRepository
 	RecordingRepo  *repository.RecordingRepository
@@ -66,7 +68,7 @@ func NewRouter(deps *RouterDependencies) *Router {
 	if eventStreamService != nil {
 		eventStreamHandler = handlers.NewEventStreamHandler(eventStreamService)
 	}
-	healthHandler := handlers.NewHealthHandler()
+	healthHandler := handlers.NewHealthHandler(deps.DB)
 
 	r := &Router{
 		config:             deps.Config,

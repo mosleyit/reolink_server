@@ -15,6 +15,8 @@ require (
 	go.uber.org/zap v1.27.0
 )
 
+require github.com/DATA-DOG/go-sqlmock v1.5.2
+
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coder/websocket v1.8.14
