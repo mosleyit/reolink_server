@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # Reolink Server
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reolink_server
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=reolink_server
+      - DATABASE_USER=reolink
+      - DATABASE_PASSWORD=reolink_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redis_password
+      - JWT_SECRET=your_jwt_secret_here_min_32_characters_long
+      - LOGGING_LEVEL=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - reolink_network
+
+  # PostgreSQL with TimescaleDB
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: reolink_postgres
+    environment:
+      - POSTGRES_DB=reolink_server
+      - POSTGRES_USER=reolink
+      - POSTGRES_PASSWORD=reolink_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reolink"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - reolink_network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: reolink_redis
+    command: redis-server --requirepass redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - reolink_network
+
+  # pgAdmin (optional, for database management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: reolink_pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@reolink.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - reolink_network
+    profiles:
+      - tools
+
+networks:
+  reolink_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+

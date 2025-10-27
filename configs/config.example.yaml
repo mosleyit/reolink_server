@@ -1,0 +1,85 @@
+# Example configuration file for Reolink Server
+# Copy this file to config.yaml and update with your values
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 120s
+  shutdown_timeout: 30s
+
+database:
+  host: localhost
+  port: 5432
+  name: reolink_server
+  user: reolink
+  password: your_secure_password_here
+  sslmode: disable
+  max_connections: 25
+  max_idle_connections: 5
+  connection_max_lifetime: 5m
+
+redis:
+  host: localhost
+  port: 6379
+  password: your_redis_password_here
+  db: 0
+  max_retries: 3
+  pool_size: 10
+
+cameras:
+  health_check_interval: 30s
+  reconnect_interval: 60s
+  max_retries: 3
+  request_timeout: 10s
+  worker_pool_size: 10
+
+events:
+  poll_interval: 5s
+  retention_days: 90
+  batch_size: 100
+  batch_interval: 1s
+  buffer_size: 1000
+
+streams:
+  session_timeout: 5m
+  cleanup_interval: 1m
+  enable_hls_transcoding: false
+  hls_segment_duration: 2s
+  hls_playlist_size: 5
+
+logging:
+  level: info
+  format: json
+  output: stdout
+  enable_caller: true
+  enable_stacktrace: false
+
+auth:
+  jwt_secret: your_jwt_secret_here_min_32_chars
+  jwt_expiration: 24h
+  bcrypt_cost: 10
+
+api:
+  rate_limit_per_minute: 100
+  rate_limit_per_ip: 1000
+  enable_cors: true
+  cors_allowed_origins:
+    - http://localhost:3000
+    - http://localhost:8080
+  cors_allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  cors_allowed_headers:
+    - Authorization
+    - Content-Type
+
+metrics:
+  enabled: true
+  path: /metrics
+  port: 9090
+
