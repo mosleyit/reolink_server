@@ -18,23 +18,25 @@ import (
 
 // Router holds the HTTP router and dependencies
 type Router struct {
-	config           *config.Config
-	mux              *chi.Mux
-	authHandler      *handlers.AuthHandler
-	cameraHandler    *handlers.CameraHandler
-	eventHandler     *handlers.EventHandler
-	recordingHandler *handlers.RecordingHandler
-	healthHandler    *handlers.HealthHandler
+	config             *config.Config
+	mux                *chi.Mux
+	authHandler        *handlers.AuthHandler
+	cameraHandler      *handlers.CameraHandler
+	eventHandler       *handlers.EventHandler
+	recordingHandler   *handlers.RecordingHandler
+	eventStreamHandler *handlers.EventStreamHandler
+	healthHandler      *handlers.HealthHandler
 }
 
 // RouterDependencies holds all dependencies needed by the router
 type RouterDependencies struct {
-	Config        *config.Config
-	CameraManager *camera.Manager
-	CameraRepo    *repository.CameraRepository
-	EventRepo     *repository.EventRepository
-	RecordingRepo *repository.RecordingRepository
-	UserRepo      *repository.UserRepository
+	Config         *config.Config
+	CameraManager  *camera.Manager
+	EventProcessor service.EventProcessor
+	CameraRepo     *repository.CameraRepository
+	EventRepo      *repository.EventRepository
+	RecordingRepo  *repository.RecordingRepository
+	UserRepo       *repository.UserRepository
 }
 
 // NewRouter creates a new HTTP router
@@ -45,21 +47,36 @@ func NewRouter(deps *RouterDependencies) *Router {
 	eventService := service.NewEventService(deps.EventRepo)
 	recordingService := service.NewRecordingService(deps.RecordingRepo)
 
+	// Create event stream service if processor is provided
+	var eventStreamService *service.EventStreamService
+	if deps.EventProcessor != nil {
+		// Create adapter to convert EventProcessor interface
+		adapter := service.NewProcessorAdapter(func(sub service.EventSubscriber) {
+			deps.EventProcessor.Subscribe(sub)
+		})
+		eventStreamService = service.NewEventStreamService(adapter)
+	}
+
 	// Create handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	cameraHandler := handlers.NewCameraHandler(cameraService)
 	eventHandler := handlers.NewEventHandler(eventService)
 	recordingHandler := handlers.NewRecordingHandler(recordingService)
+	var eventStreamHandler *handlers.EventStreamHandler
+	if eventStreamService != nil {
+		eventStreamHandler = handlers.NewEventStreamHandler(eventStreamService)
+	}
 	healthHandler := handlers.NewHealthHandler()
 
 	r := &Router{
-		config:           deps.Config,
-		mux:              chi.NewRouter(),
-		authHandler:      authHandler,
-		cameraHandler:    cameraHandler,
-		eventHandler:     eventHandler,
-		recordingHandler: recordingHandler,
-		healthHandler:    healthHandler,
+		config:             deps.Config,
+		mux:                chi.NewRouter(),
+		authHandler:        authHandler,
+		cameraHandler:      cameraHandler,
+		eventHandler:       eventHandler,
+		recordingHandler:   recordingHandler,
+		eventStreamHandler: eventStreamHandler,
+		healthHandler:      healthHandler,
 	}
 
 	r.setupMiddleware()
@@ -174,11 +191,18 @@ func (r *Router) setupRoutes() {
 			})
 
 			// WebSocket for real-time events
-			protected.Get("/ws/events", handlers.WebSocketEvents)
-			protected.Get("/ws/cameras/{id}/events", handlers.WebSocketCameraEvents)
+			if r.eventStreamHandler != nil {
+				protected.Get("/ws/events", r.eventStreamHandler.WebSocketEvents)
+				protected.Get("/ws/cameras/{id}/events", r.eventStreamHandler.WebSocketCameraEvents)
 
-			// SSE alternative
-			protected.Get("/sse/events", handlers.SSEEvents)
+				// SSE alternative
+				protected.Get("/sse/events", r.eventStreamHandler.SSEEvents)
+			} else {
+				// Fallback to legacy handlers if event stream not available
+				protected.Get("/ws/events", handlers.WebSocketEvents)
+				protected.Get("/ws/cameras/{id}/events", handlers.WebSocketCameraEvents)
+				protected.Get("/sse/events", handlers.SSEEvents)
+			}
 		})
 	})
 

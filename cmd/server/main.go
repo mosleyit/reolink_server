@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mosleyit/reolink_server/internal/api"
+	"github.com/mosleyit/reolink_server/internal/api/service"
 	"github.com/mosleyit/reolink_server/internal/camera"
 	"github.com/mosleyit/reolink_server/internal/config"
 	"github.com/mosleyit/reolink_server/internal/events"
@@ -108,14 +109,24 @@ func main() {
 
 	// TODO: Load cameras from database into camera manager
 
+	// Create event processor adapter for the router
+	type eventProcessorAdapter struct {
+		processor *events.Processor
+	}
+	// Implement Subscribe method that adapts the interface
+	var adapter service.EventProcessor = service.NewProcessorAdapter(func(sub service.EventSubscriber) {
+		eventProcessor.Subscribe(sub)
+	})
+
 	// Create HTTP router with dependencies
 	router := api.NewRouter(&api.RouterDependencies{
-		Config:        cfg,
-		CameraManager: cameraManager,
-		CameraRepo:    cameraRepo,
-		EventRepo:     eventRepo,
-		RecordingRepo: recordingRepo,
-		UserRepo:      userRepo,
+		Config:         cfg,
+		CameraManager:  cameraManager,
+		EventProcessor: adapter,
+		CameraRepo:     cameraRepo,
+		EventRepo:      eventRepo,
+		RecordingRepo:  recordingRepo,
+		UserRepo:       userRepo,
 	})
 
 	// Create HTTP server
