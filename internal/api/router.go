@@ -18,12 +18,13 @@ import (
 
 // Router holds the HTTP router and dependencies
 type Router struct {
-	config        *config.Config
-	mux           *chi.Mux
-	authHandler   *handlers.AuthHandler
-	cameraHandler *handlers.CameraHandler
-	eventHandler  *handlers.EventHandler
-	healthHandler *handlers.HealthHandler
+	config           *config.Config
+	mux              *chi.Mux
+	authHandler      *handlers.AuthHandler
+	cameraHandler    *handlers.CameraHandler
+	eventHandler     *handlers.EventHandler
+	recordingHandler *handlers.RecordingHandler
+	healthHandler    *handlers.HealthHandler
 }
 
 // RouterDependencies holds all dependencies needed by the router
@@ -32,6 +33,7 @@ type RouterDependencies struct {
 	CameraManager *camera.Manager
 	CameraRepo    *repository.CameraRepository
 	EventRepo     *repository.EventRepository
+	RecordingRepo *repository.RecordingRepository
 	UserRepo      *repository.UserRepository
 }
 
@@ -41,20 +43,23 @@ func NewRouter(deps *RouterDependencies) *Router {
 	authService := service.NewAuthService(deps.UserRepo, deps.Config.Auth.JWTSecret, deps.Config.Auth.JWTExpiration)
 	cameraService := service.NewCameraService(deps.CameraManager, deps.CameraRepo, deps.EventRepo)
 	eventService := service.NewEventService(deps.EventRepo)
+	recordingService := service.NewRecordingService(deps.RecordingRepo)
 
 	// Create handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	cameraHandler := handlers.NewCameraHandler(cameraService)
 	eventHandler := handlers.NewEventHandler(eventService)
+	recordingHandler := handlers.NewRecordingHandler(recordingService)
 	healthHandler := handlers.NewHealthHandler()
 
 	r := &Router{
-		config:        deps.Config,
-		mux:           chi.NewRouter(),
-		authHandler:   authHandler,
-		cameraHandler: cameraHandler,
-		eventHandler:  eventHandler,
-		healthHandler: healthHandler,
+		config:           deps.Config,
+		mux:              chi.NewRouter(),
+		authHandler:      authHandler,
+		cameraHandler:    cameraHandler,
+		eventHandler:     eventHandler,
+		recordingHandler: recordingHandler,
+		healthHandler:    healthHandler,
 	}
 
 	r.setupMiddleware()
@@ -161,10 +166,11 @@ func (r *Router) setupRoutes() {
 
 			// Recordings
 			protected.Route("/recordings", func(rec chi.Router) {
-				rec.Get("/", handlers.ListRecordings)
-				rec.Get("/{id}", handlers.GetRecording)
-				rec.Get("/{id}/download", handlers.DownloadRecording)
-				rec.Post("/search", handlers.SearchRecordings)
+				rec.Get("/", r.recordingHandler.ListRecordings)
+				rec.Get("/{id}", r.recordingHandler.GetRecording)
+				rec.Get("/{id}/download", r.recordingHandler.DownloadRecording)
+				rec.Post("/search", r.recordingHandler.SearchRecordings)
+				rec.Delete("/{id}", r.recordingHandler.DeleteRecording)
 			})
 
 			// WebSocket for real-time events

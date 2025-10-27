@@ -98,10 +98,12 @@ func main() {
 	// Initialize repositories
 	cameraRepo := repository.NewCameraRepository(database)
 	eventRepo := repository.NewEventRepository(database)
+	recordingRepo := repository.NewRecordingRepository(database)
 	userRepo := repository.NewUserRepository(database)
 	logger.Info("Database repositories initialized",
 		zap.String("camera_repo", "ready"),
 		zap.String("event_repo", "ready"),
+		zap.String("recording_repo", "ready"),
 		zap.String("user_repo", "ready"))
 
 	// TODO: Load cameras from database into camera manager
@@ -112,6 +114,7 @@ func main() {
 		CameraManager: cameraManager,
 		CameraRepo:    cameraRepo,
 		EventRepo:     eventRepo,
+		RecordingRepo: recordingRepo,
 		UserRepo:      userRepo,
 	})
 
