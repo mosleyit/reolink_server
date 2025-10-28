@@ -9,11 +9,17 @@ import (
 	"github.com/mosleyit/reolink_server/internal/storage/repository"
 )
 
+// EventProcessorInterface defines the interface for event processor operations
+type EventProcessorInterface interface {
+	AddCamera(ctx context.Context, cameraClient *camera.CameraClient)
+}
+
 // CameraService coordinates camera operations between the camera manager and database
 type CameraService struct {
-	cameraManager *camera.Manager
-	cameraRepo    *repository.CameraRepository
-	eventRepo     *repository.EventRepository
+	cameraManager  *camera.Manager
+	cameraRepo     *repository.CameraRepository
+	eventRepo      *repository.EventRepository
+	eventProcessor EventProcessorInterface
 }
 
 // NewCameraService creates a new camera service
@@ -21,11 +27,13 @@ func NewCameraService(
 	cameraManager *camera.Manager,
 	cameraRepo *repository.CameraRepository,
 	eventRepo *repository.EventRepository,
+	eventProcessor EventProcessorInterface,
 ) *CameraService {
 	return &CameraService{
-		cameraManager: cameraManager,
-		cameraRepo:    cameraRepo,
-		eventRepo:     eventRepo,
+		cameraManager:  cameraManager,
+		cameraRepo:     cameraRepo,
+		eventRepo:      eventRepo,
+		eventProcessor: eventProcessor,
 	}
 }
 
@@ -41,6 +49,14 @@ func (s *CameraService) AddCamera(ctx context.Context, camera *models.Camera) er
 		// Rollback: delete from database
 		_ = s.cameraRepo.Delete(ctx, camera.ID)
 		return fmt.Errorf("failed to add camera to manager: %w", err)
+	}
+
+	// Add to event processor for polling (if available)
+	if s.eventProcessor != nil {
+		cameraClient, err := s.cameraManager.GetCamera(camera.ID)
+		if err == nil && cameraClient != nil {
+			s.eventProcessor.AddCamera(ctx, cameraClient)
+		}
 	}
 
 	return nil

@@ -121,6 +121,11 @@ func main() {
 					zap.String("camera_name", camera.Name))
 			} else {
 				loadedCount++
+				// Add camera to event processor for polling
+				cameraClient, _ := cameraManager.GetCamera(camera.ID)
+				if cameraClient != nil {
+					eventProcessor.AddCamera(ctx, cameraClient)
+				}
 			}
 		}
 		logger.Info("Cameras loaded from database",
@@ -128,6 +133,10 @@ func main() {
 			zap.Int("loaded", loadedCount),
 			zap.Int("failed", len(cameras)-loadedCount))
 	}
+
+	// Start camera health monitoring
+	go cameraManager.StartHealthMonitoring(ctx)
+	logger.Info("Camera health monitoring started")
 
 	// Create event processor adapter for the router
 	type eventProcessorAdapter struct {
@@ -140,14 +149,15 @@ func main() {
 
 	// Create HTTP router with dependencies
 	router := api.NewRouter(&api.RouterDependencies{
-		Config:         cfg,
-		CameraManager:  cameraManager,
-		EventProcessor: adapter,
-		DB:             database.DB,
-		CameraRepo:     cameraRepo,
-		EventRepo:      eventRepo,
-		RecordingRepo:  recordingRepo,
-		UserRepo:       userRepo,
+		Config:            cfg,
+		CameraManager:     cameraManager,
+		EventProcessor:    adapter,
+		RawEventProcessor: eventProcessor, // Pass raw event processor for camera service
+		DB:                database.DB,
+		CameraRepo:        cameraRepo,
+		EventRepo:         eventRepo,
+		RecordingRepo:     recordingRepo,
+		UserRepo:          userRepo,
 	})
 
 	// Create HTTP server

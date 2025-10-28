@@ -32,21 +32,22 @@ type Router struct {
 
 // RouterDependencies holds all dependencies needed by the router
 type RouterDependencies struct {
-	Config         *config.Config
-	CameraManager  *camera.Manager
-	EventProcessor service.EventProcessor
-	DB             *sql.DB
-	CameraRepo     *repository.CameraRepository
-	EventRepo      *repository.EventRepository
-	RecordingRepo  *repository.RecordingRepository
-	UserRepo       *repository.UserRepository
+	Config            *config.Config
+	CameraManager     *camera.Manager
+	EventProcessor    service.EventProcessor
+	RawEventProcessor service.EventProcessorInterface // For camera service
+	DB                *sql.DB
+	CameraRepo        *repository.CameraRepository
+	EventRepo         *repository.EventRepository
+	RecordingRepo     *repository.RecordingRepository
+	UserRepo          *repository.UserRepository
 }
 
 // NewRouter creates a new HTTP router
 func NewRouter(deps *RouterDependencies) *Router {
 	// Create services
 	authService := service.NewAuthService(deps.UserRepo, deps.Config.Auth.JWTSecret, deps.Config.Auth.JWTExpiration)
-	cameraService := service.NewCameraService(deps.CameraManager, deps.CameraRepo, deps.EventRepo)
+	cameraService := service.NewCameraService(deps.CameraManager, deps.CameraRepo, deps.EventRepo, deps.RawEventProcessor)
 	eventService := service.NewEventService(deps.EventRepo)
 	recordingService := service.NewRecordingService(deps.RecordingRepo, deps.CameraManager)
 	streamService := service.NewStreamService(deps.CameraManager, nil) // Use default config

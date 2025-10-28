@@ -352,11 +352,10 @@ function startStream(cameraId) {
     // Create video element for HLS stream
     const videoHTML = `
         <video id="liveStream" class="w-full h-full rounded" controls autoplay muted>
-            <source src="${API_BASE}/cameras/${cameraId}/stream/hls/playlist.m3u8" type="application/x-mpegURL">
             Your browser does not support HLS streaming.
         </video>
         <p class="text-xs text-gray-500 mt-2">
-            Stream URL: ${API_BASE}/cameras/${cameraId}/stream/hls/playlist.m3u8
+            Loading stream...
         </p>
     `;
 
@@ -364,22 +363,48 @@ function startStream(cameraId) {
 
     // Try to load HLS using native support or hls.js
     const video = document.getElementById('liveStream');
-    const streamUrl = `${API_BASE}/cameras/${cameraId}/stream/hls/playlist.m3u8`;
+    // Include token in URL for authentication (query parameter for WebSocket-style auth)
+    const streamUrl = `${API_BASE}/cameras/${cameraId}/stream/hls/playlist.m3u8?token=${authToken}`;
 
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Native HLS support (Safari)
         video.src = streamUrl;
     } else if (typeof Hls !== 'undefined') {
         // Use hls.js for other browsers
-        const hls = new Hls();
+        const hls = new Hls({
+            xhrSetup: function(xhr, url) {
+                // Don't add header if token is already in URL
+                // But add it for segment requests that might not have the token
+                if (url.indexOf('token=') === -1) {
+                    xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+                }
+            }
+        });
         hls.loadSource(streamUrl);
         hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+            console.log('HLS manifest loaded, starting playback');
+            video.play();
+        });
+
+        hls.on(Hls.Events.ERROR, function(event, data) {
+            console.error('HLS error:', data);
+            if (data.fatal) {
+                streamContainer.innerHTML = `
+                    <div class="text-center p-4">
+                        <p class="text-red-600 mb-2">Stream error: ${data.type}</p>
+                        <p class="text-sm text-gray-600">${data.details}</p>
+                    </div>
+                `;
+            }
+        });
     } else {
         streamContainer.innerHTML = `
             <div class="text-center p-4">
                 <p class="text-red-600 mb-2">HLS streaming not supported in this browser</p>
                 <p class="text-sm text-gray-600">Try using Safari or install hls.js</p>
-                <a href="${API_BASE}/cameras/${cameraId}/stream/flv" target="_blank"
+                <a href="${API_BASE}/cameras/${cameraId}/stream/flv?token=${authToken}" target="_blank"
                    class="inline-block mt-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
                     Open FLV Stream
                 </a>
