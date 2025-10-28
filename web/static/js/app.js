@@ -173,6 +173,97 @@ async function loadCameras() {
     }
 }
 
+// Add Camera
+function showAddCameraModal() {
+    const modalHTML = `
+        <div id="addCameraModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
+                <h2 class="text-2xl font-bold mb-4">Add Camera</h2>
+                <form id="addCameraForm">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Name</label>
+                        <input type="text" id="cameraName" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Host/IP</label>
+                        <input type="text" id="cameraHost" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" placeholder="192.168.1.100" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Port</label>
+                        <input type="number" id="cameraPort" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" value="80">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                        <input type="text" id="cameraUsername" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" value="admin" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                        <input type="password" id="cameraPassword" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="cameraUseHTTPS" class="mr-2">
+                            <span class="text-sm text-gray-700">Use HTTPS</span>
+                        </label>
+                    </div>
+                    <div class="mb-6">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="cameraSkipVerify" class="mr-2" checked>
+                            <span class="text-sm text-gray-700">Skip SSL Verification</span>
+                        </label>
+                    </div>
+                    <div id="addCameraError" class="mb-4 text-red-500 text-sm hidden"></div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            Add Camera
+                        </button>
+                        <button type="button" onclick="closeAddCameraModal()" class="flex-1 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    document.getElementById('addCameraForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const cameraData = {
+            name: document.getElementById('cameraName').value,
+            host: document.getElementById('cameraHost').value,
+            port: parseInt(document.getElementById('cameraPort').value) || 80,
+            username: document.getElementById('cameraUsername').value,
+            password: document.getElementById('cameraPassword').value,
+            use_https: document.getElementById('cameraUseHTTPS').checked,
+            skip_verify: document.getElementById('cameraSkipVerify').checked
+        };
+
+        try {
+            await apiRequest('/cameras', {
+                method: 'POST',
+                body: JSON.stringify(cameraData)
+            });
+
+            closeAddCameraModal();
+            await loadCameras();
+        } catch (error) {
+            console.error('Failed to add camera:', error);
+            document.getElementById('addCameraError').textContent = error.message;
+            document.getElementById('addCameraError').classList.remove('hidden');
+        }
+    });
+}
+
+function closeAddCameraModal() {
+    const modal = document.getElementById('addCameraModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
 // View Camera Details
 async function viewCamera(cameraId) {
     try {
