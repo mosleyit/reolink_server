@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
+	"github.com/mosleyit/reolink_server/internal/api/service"
+	"github.com/mosleyit/reolink_server/internal/logger"
 	"github.com/mosleyit/reolink_server/internal/storage/models"
 	"github.com/mosleyit/reolink_server/pkg/utils"
 )
@@ -23,6 +26,7 @@ type RecordingServiceInterface interface {
 	CountRecordings(ctx context.Context) (int, error)
 	GetTotalSize(ctx context.Context) (int64, error)
 	DeleteRecording(ctx context.Context, id string) error
+	GetRecordingDownloadInfo(ctx context.Context, recording *models.Recording) (*service.RecordingDownloadInfo, error)
 }
 
 // RecordingHandler handles recording requests
@@ -134,15 +138,17 @@ func (h *RecordingHandler) DownloadRecording(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// TODO: Implement actual file download from storage
-	// For now, return recording metadata with download URL
-	response := map[string]interface{}{
-		"recording":    recording,
-		"download_url": "/api/v1/recordings/" + id + "/file",
-		"message":      "File download not yet implemented. Use the camera's recording download API directly.",
+	// Get download URL from recording service
+	downloadInfo, err := h.recordingService.GetRecordingDownloadInfo(ctx, recording)
+	if err != nil {
+		logger.Error("Failed to get recording download info",
+			zap.Error(err),
+			zap.String("recording_id", id))
+		utils.RespondInternalError(w, "Failed to generate download information")
+		return
 	}
 
-	utils.RespondJSON(w, http.StatusOK, response)
+	utils.RespondJSON(w, http.StatusOK, downloadInfo)
 }
 
 // SearchRecordings handles POST /api/v1/recordings/search

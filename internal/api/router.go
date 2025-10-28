@@ -47,7 +47,7 @@ func NewRouter(deps *RouterDependencies) *Router {
 	authService := service.NewAuthService(deps.UserRepo, deps.Config.Auth.JWTSecret, deps.Config.Auth.JWTExpiration)
 	cameraService := service.NewCameraService(deps.CameraManager, deps.CameraRepo, deps.EventRepo)
 	eventService := service.NewEventService(deps.EventRepo)
-	recordingService := service.NewRecordingService(deps.RecordingRepo)
+	recordingService := service.NewRecordingService(deps.RecordingRepo, deps.CameraManager)
 
 	// Create event stream service if processor is provided
 	var eventStreamService *service.EventStreamService

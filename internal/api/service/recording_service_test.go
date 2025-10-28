@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/mosleyit/reolink_server/internal/camera"
 	"github.com/mosleyit/reolink_server/internal/storage/models"
 )
 
@@ -83,17 +84,33 @@ func (m *MockRecordingRepository) DeleteOlderThan(ctx context.Context, olderThan
 	return args.Get(0).(int64), args.Error(1)
 }
 
+// MockCameraManager is a mock implementation of CameraManager
+type MockCameraManager struct {
+	mock.Mock
+}
+
+func (m *MockCameraManager) GetCamera(id string) (*camera.CameraClient, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*camera.CameraClient), args.Error(1)
+}
+
 func TestNewRecordingService(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 
 	assert.NotNil(t, service)
 	assert.Equal(t, mockRepo, service.recordingRepo)
+	assert.Equal(t, mockCameraManager, service.cameraManager)
 }
 
 func TestRecordingService_GetRecording(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	expectedRecording := &models.Recording{
@@ -113,7 +130,8 @@ func TestRecordingService_GetRecording(t *testing.T) {
 
 func TestRecordingService_ListRecordings(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	expectedRecordings := []*models.Recording{
@@ -137,7 +155,8 @@ func TestRecordingService_ListRecordings(t *testing.T) {
 
 func TestRecordingService_ListRecordingsByCameraID(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	expectedRecordings := []*models.Recording{
@@ -156,7 +175,8 @@ func TestRecordingService_ListRecordingsByCameraID(t *testing.T) {
 
 func TestRecordingService_ListRecordingsByTimeRange(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	startTime := time.Now().Add(-24 * time.Hour)
@@ -177,7 +197,8 @@ func TestRecordingService_ListRecordingsByTimeRange(t *testing.T) {
 
 func TestRecordingService_SearchRecordings(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	cameraID := "cam-123"
@@ -202,7 +223,8 @@ func TestRecordingService_SearchRecordings(t *testing.T) {
 
 func TestRecordingService_CountRecordings(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	mockRepo.On("Count", ctx).Return(42, nil)
@@ -216,7 +238,8 @@ func TestRecordingService_CountRecordings(t *testing.T) {
 
 func TestRecordingService_GetTotalSize(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	mockRepo.On("GetTotalSize", ctx).Return(int64(1024000), nil)
@@ -230,7 +253,8 @@ func TestRecordingService_GetTotalSize(t *testing.T) {
 
 func TestRecordingService_DeleteRecording(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	mockRepo.On("Delete", ctx, "rec-123").Return(nil)
@@ -243,7 +267,8 @@ func TestRecordingService_DeleteRecording(t *testing.T) {
 
 func TestRecordingService_DeleteOldRecordings(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	olderThan := time.Now().Add(-30 * 24 * time.Hour)
@@ -258,7 +283,8 @@ func TestRecordingService_DeleteOldRecordings(t *testing.T) {
 
 func TestRecordingService_CreateRecording(t *testing.T) {
 	mockRepo := new(MockRecordingRepository)
-	service := NewRecordingService(mockRepo)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
 	ctx := context.Background()
 
 	recording := &models.Recording{
@@ -273,4 +299,32 @@ func TestRecordingService_CreateRecording(t *testing.T) {
 
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
+}
+
+// Note: Testing GetRecordingDownloadInfo with a real camera client requires
+// a fully initialized CameraClient with SDK client, which is complex to mock.
+// The error case (camera not found) is tested below, and the success case
+// is better tested at the integration level or through handler tests.
+
+func TestRecordingService_GetRecordingDownloadInfo_CameraNotFound(t *testing.T) {
+	mockRepo := new(MockRecordingRepository)
+	mockCameraManager := new(MockCameraManager)
+	service := NewRecordingService(mockRepo, mockCameraManager)
+	ctx := context.Background()
+
+	recording := &models.Recording{
+		ID:          "rec-123",
+		CameraID:    "cam-999",
+		FileName:    "recording.mp4",
+		StoragePath: "/path/to/recording.mp4",
+	}
+
+	mockCameraManager.On("GetCamera", "cam-999").Return(nil, assert.AnError)
+
+	downloadInfo, err := service.GetRecordingDownloadInfo(ctx, recording)
+
+	assert.Error(t, err)
+	assert.Nil(t, downloadInfo)
+	assert.Contains(t, err.Error(), "camera not found or unavailable")
+	mockCameraManager.AssertExpectations(t)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/mosleyit/reolink_server/internal/api/service"
 	"github.com/mosleyit/reolink_server/internal/storage/models"
 )
 
@@ -94,6 +95,14 @@ func (m *MockRecordingService) DeleteOldRecordings(ctx context.Context, olderTha
 func (m *MockRecordingService) CreateRecording(ctx context.Context, recording *models.Recording) error {
 	args := m.Called(ctx, recording)
 	return args.Error(0)
+}
+
+func (m *MockRecordingService) GetRecordingDownloadInfo(ctx context.Context, recording *models.Recording) (*service.RecordingDownloadInfo, error) {
+	args := m.Called(ctx, recording)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.RecordingDownloadInfo), args.Error(1)
 }
 
 func TestNewRecordingHandler(t *testing.T) {
@@ -264,12 +273,21 @@ func TestRecordingHandler_DownloadRecording(t *testing.T) {
 	handler := NewRecordingHandler(mockService)
 
 	recording := &models.Recording{
-		ID:       "rec-123",
-		CameraID: "cam-123",
-		FileName: "recording.mp4",
+		ID:          "rec-123",
+		CameraID:    "cam-123",
+		FileName:    "recording.mp4",
+		StoragePath: "/path/to/recording.mp4",
+	}
+
+	downloadInfo := &service.RecordingDownloadInfo{
+		Recording:   recording,
+		DownloadURL: "http://camera.local/download/recording.mp4",
+		Method:      "GET",
+		Note:        "Use this URL to download the recording file directly from the camera",
 	}
 
 	mockService.On("GetRecording", mock.Anything, "rec-123").Return(recording, nil)
+	mockService.On("GetRecordingDownloadInfo", mock.Anything, recording).Return(downloadInfo, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/recordings/rec-123/download", nil)
 	w := httptest.NewRecorder()
@@ -282,5 +300,70 @@ func TestRecordingHandler_DownloadRecording(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "download_url")
+	assert.Contains(t, w.Body.String(), "http://camera.local/download/recording.mp4")
+	mockService.AssertExpectations(t)
+}
+
+func TestRecordingHandler_DownloadRecording_MissingID(t *testing.T) {
+	mockService := new(MockRecordingService)
+	handler := NewRecordingHandler(mockService)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/recordings//download", nil)
+	w := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	handler.DownloadRecording(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Recording ID is required")
+}
+
+func TestRecordingHandler_DownloadRecording_RecordingNotFound(t *testing.T) {
+	mockService := new(MockRecordingService)
+	handler := NewRecordingHandler(mockService)
+
+	mockService.On("GetRecording", mock.Anything, "rec-999").Return(nil, assert.AnError)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/recordings/rec-999/download", nil)
+	w := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "rec-999")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	handler.DownloadRecording(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "Recording not found")
+	mockService.AssertExpectations(t)
+}
+
+func TestRecordingHandler_DownloadRecording_CameraUnavailable(t *testing.T) {
+	mockService := new(MockRecordingService)
+	handler := NewRecordingHandler(mockService)
+
+	recording := &models.Recording{
+		ID:          "rec-123",
+		CameraID:    "cam-123",
+		FileName:    "recording.mp4",
+		StoragePath: "/path/to/recording.mp4",
+	}
+
+	mockService.On("GetRecording", mock.Anything, "rec-123").Return(recording, nil)
+	mockService.On("GetRecordingDownloadInfo", mock.Anything, recording).Return(nil, assert.AnError)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/recordings/rec-123/download", nil)
+	w := httptest.NewRecorder()
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "rec-123")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	handler.DownloadRecording(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "Failed to generate download information")
 	mockService.AssertExpectations(t)
 }

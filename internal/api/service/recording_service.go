@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/mosleyit/reolink_server/internal/camera"
 	"github.com/mosleyit/reolink_server/internal/storage/models"
 )
 
@@ -22,15 +24,22 @@ type RecordingRepository interface {
 	DeleteOlderThan(ctx context.Context, olderThan time.Time) (int64, error)
 }
 
+// CameraManager interface for dependency injection
+type CameraManager interface {
+	GetCamera(id string) (*camera.CameraClient, error)
+}
+
 // RecordingService handles recording operations
 type RecordingService struct {
 	recordingRepo RecordingRepository
+	cameraManager CameraManager
 }
 
 // NewRecordingService creates a new recording service
-func NewRecordingService(recordingRepo RecordingRepository) *RecordingService {
+func NewRecordingService(recordingRepo RecordingRepository, cameraManager CameraManager) *RecordingService {
 	return &RecordingService{
 		recordingRepo: recordingRepo,
+		cameraManager: cameraManager,
 	}
 }
 
@@ -116,4 +125,32 @@ func (s *RecordingService) DeleteOldRecordings(ctx context.Context, olderThan ti
 // CreateRecording creates a new recording
 func (s *RecordingService) CreateRecording(ctx context.Context, recording *models.Recording) error {
 	return s.recordingRepo.Create(ctx, recording)
+}
+
+// RecordingDownloadInfo contains information for downloading a recording
+type RecordingDownloadInfo struct {
+	Recording   *models.Recording `json:"recording"`
+	DownloadURL string            `json:"download_url"`
+	Method      string            `json:"method"`
+	Note        string            `json:"note,omitempty"`
+}
+
+// GetRecordingDownloadInfo generates download information for a recording
+func (s *RecordingService) GetRecordingDownloadInfo(ctx context.Context, recording *models.Recording) (*RecordingDownloadInfo, error) {
+	// Get camera client to generate download URL
+	cameraClient, err := s.cameraManager.GetCamera(recording.CameraID)
+	if err != nil {
+		return nil, fmt.Errorf("camera not found or unavailable: %w", err)
+	}
+
+	// Generate download URL using the SDK's Download method
+	// The SDK's Download method returns a URL for downloading the recording
+	downloadURL := cameraClient.Download(recording.StoragePath, "")
+
+	return &RecordingDownloadInfo{
+		Recording:   recording,
+		DownloadURL: downloadURL,
+		Method:      "GET",
+		Note:        "Use this URL to download the recording file directly from the camera",
+	}, nil
 }
