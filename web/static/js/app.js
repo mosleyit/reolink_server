@@ -102,26 +102,30 @@ function showLogin() {
 // System Status
 async function loadSystemStatus() {
     try {
-        const health = await fetch('/health').then(r => r.json());
-        const ready = await fetch('/ready').then(r => r.json());
+        const healthResp = await fetch('/health').then(r => r.json());
+        const readyResp = await fetch('/ready').then(r => r.json());
+
+        const health = healthResp.data;
+        const ready = readyResp.data;
 
         document.getElementById('status').innerHTML = `
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <p class="text-sm text-gray-500">Health</p>
-                    <p class="text-lg font-semibold ${health.status === 'ok' ? 'text-green-600' : 'text-red-600'}">
+                    <p class="text-lg font-semibold ${health.status === 'healthy' ? 'text-green-600' : 'text-red-600'}">
                         ${health.status.toUpperCase()}
                     </p>
                 </div>
                 <div>
                     <p class="text-sm text-gray-500">Database</p>
-                    <p class="text-lg font-semibold ${ready.database === 'connected' ? 'text-green-600' : 'text-red-600'}">
-                        ${ready.database}
+                    <p class="text-lg font-semibold ${ready.components.database === 'healthy' ? 'text-green-600' : 'text-red-600'}">
+                        ${ready.components.database.toUpperCase()}
                     </p>
                 </div>
             </div>
         `;
     } catch (error) {
+        console.error('Failed to load system status:', error);
         document.getElementById('status').innerHTML = `
             <p class="text-red-600">Failed to load system status</p>
         `;
