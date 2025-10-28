@@ -226,5 +226,14 @@ func (r *Router) setupRoutes() {
 	// Serve static files for frontend
 	fileServer := http.FileServer(http.Dir("./web/static"))
 	r.mux.Handle("/static/*", http.StripPrefix("/static/", fileServer))
+
+	// Serve common files at root
+	r.mux.Get("/favicon.ico", func(w http.ResponseWriter, req *http.Request) {
+		http.ServeFile(w, req, "./web/static/favicon.svg")
+	})
+	r.mux.Get("/robots.txt", func(w http.ResponseWriter, req *http.Request) {
+		http.ServeFile(w, req, "./web/static/robots.txt")
+	})
+
 	r.mux.Get("/", handlers.ServeIndex)
 }
