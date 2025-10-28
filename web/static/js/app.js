@@ -81,8 +81,9 @@ function showLogin() {
                 throw new Error('Invalid credentials');
             }
 
-            const data = await response.json();
-            authToken = data.token;
+            const result = await response.json();
+            // API returns { success: true, data: { token: "...", ... } }
+            authToken = result.data.token;
             localStorage.setItem('authToken', authToken);
 
             // Remove login modal
@@ -91,6 +92,7 @@ function showLogin() {
             // Initialize app
             init();
         } catch (error) {
+            console.error('Login error:', error);
             document.getElementById('loginError').textContent = error.message;
             document.getElementById('loginError').classList.remove('hidden');
         }
@@ -129,8 +131,8 @@ async function loadSystemStatus() {
 // Cameras
 async function loadCameras() {
     try {
-        const data = await apiRequest('/cameras');
-        const cameras = data.cameras || [];
+        const result = await apiRequest('/cameras');
+        const cameras = result.data.cameras || [];
 
         if (cameras.length === 0) {
             document.getElementById('cameras').innerHTML = `
@@ -170,8 +172,10 @@ async function loadCameras() {
 // View Camera Details
 async function viewCamera(cameraId) {
     try {
-        const camera = await apiRequest(`/cameras/${cameraId}`);
-        const status = await apiRequest(`/cameras/${cameraId}/status`);
+        const cameraResult = await apiRequest(`/cameras/${cameraId}`);
+        const statusResult = await apiRequest(`/cameras/${cameraId}/status`);
+        const camera = cameraResult.data;
+        const status = statusResult.data;
 
         const modal = `
             <div id="cameraModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
@@ -287,8 +291,8 @@ async function controlPTZ(cameraId, direction) {
 // Events
 async function loadEvents() {
     try {
-        const data = await apiRequest('/events?limit=10');
-        const events = data.events || [];
+        const result = await apiRequest('/events?limit=10');
+        const events = result.data.events || [];
 
         if (events.length === 0) {
             document.getElementById('events').innerHTML = `
