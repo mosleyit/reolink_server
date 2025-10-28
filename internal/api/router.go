@@ -26,6 +26,7 @@ type Router struct {
 	eventHandler       *handlers.EventHandler
 	recordingHandler   *handlers.RecordingHandler
 	eventStreamHandler *handlers.EventStreamHandler
+	streamHandler      *handlers.StreamHandler
 	healthHandler      *handlers.HealthHandler
 }
 
@@ -48,6 +49,7 @@ func NewRouter(deps *RouterDependencies) *Router {
 	cameraService := service.NewCameraService(deps.CameraManager, deps.CameraRepo, deps.EventRepo)
 	eventService := service.NewEventService(deps.EventRepo)
 	recordingService := service.NewRecordingService(deps.RecordingRepo, deps.CameraManager)
+	streamService := service.NewStreamService(deps.CameraManager, nil) // Use default config
 
 	// Create event stream service if processor is provided
 	var eventStreamService *service.EventStreamService
@@ -64,6 +66,7 @@ func NewRouter(deps *RouterDependencies) *Router {
 	cameraHandler := handlers.NewCameraHandler(cameraService)
 	eventHandler := handlers.NewEventHandler(eventService, cameraService)
 	recordingHandler := handlers.NewRecordingHandler(recordingService)
+	streamHandler := handlers.NewStreamHandler(streamService)
 	var eventStreamHandler *handlers.EventStreamHandler
 	if eventStreamService != nil {
 		eventStreamHandler = handlers.NewEventStreamHandler(eventStreamService)
@@ -78,6 +81,7 @@ func NewRouter(deps *RouterDependencies) *Router {
 		eventHandler:       eventHandler,
 		recordingHandler:   recordingHandler,
 		eventStreamHandler: eventStreamHandler,
+		streamHandler:      streamHandler,
 		healthHandler:      healthHandler,
 	}
 
@@ -169,10 +173,21 @@ func (r *Router) setupRoutes() {
 				// Events for specific camera
 				cam.Get("/{id}/events", r.cameraHandler.GetCameraEvents)
 
-				// Streams
+				// Stream URLs (direct camera URLs)
 				cam.Get("/{id}/stream/rtsp", r.cameraHandler.GetRTSPURL)
 				cam.Get("/{id}/stream/flv", r.cameraHandler.GetFLVURL)
 				cam.Get("/{id}/stream/hls", r.cameraHandler.GetHLSURL)
+
+				// Stream Proxy (proxied through server)
+				cam.Get("/{id}/stream/flv/proxy", r.streamHandler.ProxyFLV)
+				cam.Post("/{id}/stream/hls/start", r.streamHandler.StartHLS)
+			})
+
+			// HLS Stream Management (session-based)
+			protected.Route("/stream/hls", func(hls chi.Router) {
+				hls.Get("/{session_id}/playlist.m3u8", r.streamHandler.GetHLSPlaylist)
+				hls.Get("/{session_id}/{segment}", r.streamHandler.GetHLSSegment)
+				hls.Delete("/{session_id}", r.streamHandler.StopHLS)
 			})
 
 			// Events
