@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -10,14 +11,28 @@ import (
 
 	reolink "github.com/mosleyit/reolink_api_wrapper"
 	"github.com/mosleyit/reolink_server/internal/api/service"
+	"github.com/mosleyit/reolink_server/internal/camera"
 	"github.com/mosleyit/reolink_server/internal/logger"
 	"github.com/mosleyit/reolink_server/internal/storage/models"
 	"github.com/mosleyit/reolink_server/pkg/utils"
 )
 
+// CameraServiceInterface defines the interface for camera service operations
+type CameraServiceInterface interface {
+	AddCamera(ctx context.Context, camera *models.Camera) error
+	GetCamera(ctx context.Context, id string) (*models.Camera, error)
+	ListCameras(ctx context.Context) ([]*models.Camera, error)
+	UpdateCamera(ctx context.Context, camera *models.Camera) error
+	DeleteCamera(ctx context.Context, id string) error
+	GetCameraStatus(ctx context.Context, id string) (*models.CameraStatus, error)
+	GetCameraClient(id string) (*camera.CameraClient, error)
+	GetCameraEvents(ctx context.Context, cameraID string, limit, offset int) ([]*models.Event, error)
+	CountCameraEvents(ctx context.Context, cameraID string) (int, error)
+}
+
 // CameraHandler handles camera-related HTTP requests
 type CameraHandler struct {
-	cameraService *service.CameraService
+	cameraService CameraServiceInterface
 }
 
 // NewCameraHandler creates a new camera handler
@@ -441,14 +456,213 @@ func (h *CameraHandler) TriggerSiren(w http.ResponseWriter, r *http.Request) {
 
 // GetCameraConfig handles GET /api/v1/cameras/{id}/config/{type}
 func (h *CameraHandler) GetCameraConfig(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement get camera config - this would require mapping config types to SDK methods
-	utils.RespondError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Get camera config not yet implemented", nil)
+	ctx := r.Context()
+	cameraID := chi.URLParam(r, "id")
+	configType := chi.URLParam(r, "type")
+
+	// Validate config type first
+	supportedTypes := []string{
+		"time", "device_name", "auto_maint", "system", "encoding", "ai",
+		"motion_alarm", "alarm", "audio_alarm", "buzzer_alarm", "ai_alarm",
+		"recording", "osd", "image", "isp", "mask", "crop",
+		"network_port", "ntp", "wifi", "email", "ftp", "push",
+	}
+
+	validType := false
+	for _, t := range supportedTypes {
+		if t == configType {
+			validType = true
+			break
+		}
+	}
+
+	if !validType {
+		utils.RespondBadRequest(w, "Unsupported config type", map[string]interface{}{
+			"type":            configType,
+			"supported_types": supportedTypes,
+		})
+		return
+	}
+
+	// Get channel from query params (default to 0)
+	channelStr := r.URL.Query().Get("channel")
+	channel := 0
+	if channelStr != "" {
+		var err error
+		channel, err = strconv.Atoi(channelStr)
+		if err != nil {
+			utils.RespondBadRequest(w, "Invalid channel parameter", map[string]interface{}{"channel": channelStr})
+			return
+		}
+	}
+
+	// Get camera client
+	client, err := h.cameraService.GetCameraClient(cameraID)
+	if err != nil {
+		utils.RespondNotFound(w, "Camera not found")
+		return
+	}
+
+	// Route to appropriate config getter based on type
+	var config interface{}
+	switch configType {
+	case "time":
+		config, err = client.GetTime(ctx)
+	case "device_name":
+		config, err = client.GetDeviceName(ctx)
+	case "auto_maint":
+		config, err = client.GetAutoMaint(ctx)
+	case "system":
+		config, err = client.GetSysCfg(ctx)
+	case "encoding":
+		config, err = client.GetEnc(ctx, channel)
+	case "ai":
+		config, err = client.GetAiCfg(ctx, channel)
+	case "motion_alarm":
+		config, err = client.GetMdAlarm(ctx, channel)
+	case "alarm":
+		alarmType := r.URL.Query().Get("alarm_type")
+		if alarmType == "" {
+			alarmType = "md" // default to motion detection
+		}
+		config, err = client.GetAlarm(ctx, channel, alarmType)
+	case "audio_alarm":
+		config, err = client.GetAudioAlarm(ctx, channel)
+	case "buzzer_alarm":
+		config, err = client.GetBuzzerAlarmV20(ctx, channel)
+	case "ai_alarm":
+		aiType := r.URL.Query().Get("ai_type")
+		if aiType == "" {
+			aiType = "people" // default to people detection
+		}
+		config, err = client.GetAiAlarm(ctx, channel, aiType)
+	case "recording":
+		config, err = client.GetRec(ctx, channel)
+	case "osd":
+		config, err = client.GetOsd(ctx, channel)
+	case "image":
+		config, err = client.GetImage(ctx, channel)
+	case "isp":
+		config, err = client.GetIsp(ctx, channel)
+	case "mask":
+		config, err = client.GetMask(ctx, channel)
+	case "crop":
+		config, err = client.GetCrop(ctx, channel)
+	case "network_port":
+		config, err = client.GetNetPort(ctx)
+	case "ntp":
+		config, err = client.GetNtp(ctx)
+	case "wifi":
+		config, err = client.GetWifi(ctx)
+	case "email":
+		config, err = client.GetEmail(ctx)
+	case "ftp":
+		config, err = client.GetFtp(ctx)
+	case "push":
+		config, err = client.GetPush(ctx)
+	}
+
+	if err != nil {
+		logger.Error("Failed to get camera config",
+			zap.Error(err),
+			zap.String("camera_id", cameraID),
+			zap.String("config_type", configType))
+		utils.RespondInternalError(w, "Failed to get camera configuration")
+		return
+	}
+
+	utils.RespondJSON(w, http.StatusOK, config)
 }
 
 // UpdateCameraConfig handles PUT /api/v1/cameras/{id}/config/{type}
 func (h *CameraHandler) UpdateCameraConfig(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement update camera config - this would require mapping config types to SDK methods
-	utils.RespondError(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Update camera config not yet implemented", nil)
+	ctx := r.Context()
+	cameraID := chi.URLParam(r, "id")
+	configType := chi.URLParam(r, "type")
+
+	// Validate config type first
+	supportedTypes := []string{"device_name", "time", "system"}
+	validType := false
+	for _, t := range supportedTypes {
+		if t == configType {
+			validType = true
+			break
+		}
+	}
+
+	if !validType {
+		utils.RespondBadRequest(w, "Unsupported config type for update", map[string]interface{}{
+			"type":            configType,
+			"supported_types": supportedTypes,
+			"note":            "Additional config types can be added as needed",
+		})
+		return
+	}
+
+	// Parse and validate request body based on config type
+	var deviceName string
+	var timeConfig *reolink.TimeConfig
+	var sysCfg *reolink.SysCfg
+
+	switch configType {
+	case "device_name":
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.RespondBadRequest(w, "Invalid request body", nil)
+			return
+		}
+		deviceName = req.Name
+
+	case "time":
+		var cfg reolink.TimeConfig
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			utils.RespondBadRequest(w, "Invalid request body", nil)
+			return
+		}
+		timeConfig = &cfg
+
+	case "system":
+		var cfg reolink.SysCfg
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			utils.RespondBadRequest(w, "Invalid request body", nil)
+			return
+		}
+		sysCfg = &cfg
+	}
+
+	// Get camera client after validating input
+	client, err := h.cameraService.GetCameraClient(cameraID)
+	if err != nil {
+		utils.RespondNotFound(w, "Camera not found")
+		return
+	}
+
+	// Apply configuration changes
+	var updateErr error
+	switch configType {
+	case "device_name":
+		updateErr = client.SetDeviceName(ctx, deviceName)
+	case "time":
+		updateErr = client.SetTime(ctx, timeConfig)
+	case "system":
+		updateErr = client.SetSysCfg(ctx, *sysCfg)
+	}
+
+	if updateErr != nil {
+		logger.Error("Failed to update camera config",
+			zap.Error(updateErr),
+			zap.String("camera_id", cameraID),
+			zap.String("config_type", configType))
+		utils.RespondInternalError(w, "Failed to update camera configuration")
+		return
+	}
+
+	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Configuration updated successfully",
+		"type":    configType,
+	})
 }
 
 // GetCameraEvents handles GET /api/v1/cameras/{id}/events
