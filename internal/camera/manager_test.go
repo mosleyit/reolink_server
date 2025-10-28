@@ -45,7 +45,7 @@ func TestNewManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := NewManager(tt.config)
+			m := NewManager(tt.config, nil)
 			assert.NotNil(t, m)
 			assert.NotNil(t, m.cameras)
 			assert.Equal(t, tt.want.HealthCheckInterval, m.config.HealthCheckInterval)
@@ -57,7 +57,7 @@ func TestNewManager(t *testing.T) {
 }
 
 func TestManager_AddCamera_InvalidInput(t *testing.T) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 
 	tests := []struct {
 		name    string
@@ -133,7 +133,7 @@ func TestManager_AddCamera_InvalidInput(t *testing.T) {
 }
 
 func TestManager_RemoveCamera(t *testing.T) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 
 	// Test removing non-existent camera
 	err := m.RemoveCamera("nonexistent")
@@ -142,7 +142,7 @@ func TestManager_RemoveCamera(t *testing.T) {
 }
 
 func TestManager_GetCamera(t *testing.T) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 
 	// Test getting non-existent camera
 	client, err := m.GetCamera("nonexistent")
@@ -151,7 +151,7 @@ func TestManager_GetCamera(t *testing.T) {
 }
 
 func TestManager_ListCameras(t *testing.T) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 
 	// Test empty list
 	cameras := m.ListCameras()
@@ -160,7 +160,7 @@ func TestManager_ListCameras(t *testing.T) {
 }
 
 func TestManager_GetCameraStatus(t *testing.T) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 
 	// Test getting status of non-existent camera
 	status, err := m.GetCameraStatus("nonexistent")
@@ -250,7 +250,7 @@ func TestCameraClient_CircuitBreaker(t *testing.T) {
 }
 
 func TestManager_Shutdown(t *testing.T) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 
 	// Test shutdown with no cameras
 	err := m.Shutdown(context.Background())
@@ -289,12 +289,12 @@ func TestCameraStatus(t *testing.T) {
 // Benchmark tests
 func BenchmarkNewManager(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = NewManager(nil)
+		_ = NewManager(nil, nil)
 	}
 }
 
 func BenchmarkManager_GetCamera(b *testing.B) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -303,7 +303,7 @@ func BenchmarkManager_GetCamera(b *testing.B) {
 }
 
 func BenchmarkManager_ListCameras(b *testing.B) {
-	m := NewManager(nil)
+	m := NewManager(nil, nil)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

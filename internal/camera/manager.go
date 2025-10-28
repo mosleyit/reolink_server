@@ -13,11 +13,17 @@ import (
 	"github.com/mosleyit/reolink_server/internal/storage/models"
 )
 
+// CameraRepository interface for database operations
+type CameraRepository interface {
+	UpdateStatus(ctx context.Context, id string, status string, lastSeen time.Time) error
+}
+
 // Manager manages all camera connections and operations
 type Manager struct {
 	cameras map[string]*CameraClient
 	mu      sync.RWMutex
 	config  *Config
+	repo    CameraRepository
 }
 
 // Config holds camera manager configuration
@@ -39,7 +45,7 @@ type CameraClient struct {
 }
 
 // NewManager creates a new camera manager
-func NewManager(config *Config) *Manager {
+func NewManager(config *Config, repo CameraRepository) *Manager {
 	if config == nil {
 		config = &Config{
 			HealthCheckInterval: 30 * time.Second,
@@ -52,6 +58,7 @@ func NewManager(config *Config) *Manager {
 	return &Manager{
 		cameras: make(map[string]*CameraClient),
 		config:  config,
+		repo:    repo,
 	}
 }
 
@@ -221,6 +228,7 @@ func (m *Manager) checkCameraHealth(ctx context.Context, client *CameraClient) {
 	_, err := client.Client.System.GetDeviceInfo(ctx)
 	if err != nil {
 		client.FailureCount++
+		oldStatus := client.Camera.Status
 		client.Camera.Status = "offline"
 
 		logger.Warn("Camera health check failed",
@@ -228,6 +236,15 @@ func (m *Manager) checkCameraHealth(ctx context.Context, client *CameraClient) {
 			zap.Int("failure_count", client.FailureCount),
 			zap.Error(err),
 		)
+
+		// Update database if status changed
+		if m.repo != nil && oldStatus != "offline" {
+			if err := m.repo.UpdateStatus(ctx, client.Camera.ID, "offline", time.Now()); err != nil {
+				logger.Error("Failed to update camera status in database",
+					zap.String("camera_id", client.Camera.ID),
+					zap.Error(err))
+			}
+		}
 
 		// Open circuit if too many failures
 		if client.FailureCount >= m.config.MaxRetries {
@@ -241,8 +258,18 @@ func (m *Manager) checkCameraHealth(ctx context.Context, client *CameraClient) {
 		client.FailureCount = 0
 		client.CircuitOpen = false
 		client.LastHealthy = time.Now()
+		oldStatus := client.Camera.Status
 		client.Camera.Status = "online"
 		client.Camera.LastSeen = time.Now()
+
+		// Update database if status changed
+		if m.repo != nil && oldStatus != "online" {
+			if err := m.repo.UpdateStatus(ctx, client.Camera.ID, "online", time.Now()); err != nil {
+				logger.Error("Failed to update camera status in database",
+					zap.String("camera_id", client.Camera.ID),
+					zap.Error(err))
+			}
+		}
 	}
 }
 

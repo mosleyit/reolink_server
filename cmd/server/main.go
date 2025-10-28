@@ -49,8 +49,32 @@ func main() {
 		zap.String("build_time", buildTime),
 	)
 
-	// Initialize camera manager
-	cameraManager := camera.NewManager(nil)
+	// Initialize database connection first
+	ctx := context.Background()
+	database, err := db.New(cfg.Database)
+	if err != nil {
+		logger.Fatal("Failed to connect to database", zap.Error(err))
+	}
+	defer database.Close()
+
+	// Run database migrations
+	if err := database.RunMigrations(ctx, "migrations"); err != nil {
+		logger.Fatal("Failed to run database migrations", zap.Error(err))
+	}
+
+	// Initialize repositories
+	cameraRepo := repository.NewCameraRepository(database)
+	eventRepo := repository.NewEventRepository(database)
+	recordingRepo := repository.NewRecordingRepository(database)
+	userRepo := repository.NewUserRepository(database)
+	logger.Info("Database repositories initialized",
+		zap.String("camera_repo", "ready"),
+		zap.String("event_repo", "ready"),
+		zap.String("recording_repo", "ready"),
+		zap.String("user_repo", "ready"))
+
+	// Initialize camera manager with repository
+	cameraManager := camera.NewManager(nil, cameraRepo)
 	logger.Info("Camera manager initialized")
 
 	// Initialize event processor
@@ -78,34 +102,10 @@ func main() {
 	}
 
 	// Start event processor
-	ctx := context.Background()
 	if err := eventProcessor.Start(ctx); err != nil {
 		logger.Fatal("Failed to start event processor", zap.Error(err))
 	}
 	logger.Info("Event processor started")
-
-	// Initialize database connection
-	database, err := db.New(cfg.Database)
-	if err != nil {
-		logger.Fatal("Failed to connect to database", zap.Error(err))
-	}
-	defer database.Close()
-
-	// Run database migrations
-	if err := database.RunMigrations(ctx, "migrations"); err != nil {
-		logger.Fatal("Failed to run database migrations", zap.Error(err))
-	}
-
-	// Initialize repositories
-	cameraRepo := repository.NewCameraRepository(database)
-	eventRepo := repository.NewEventRepository(database)
-	recordingRepo := repository.NewRecordingRepository(database)
-	userRepo := repository.NewUserRepository(database)
-	logger.Info("Database repositories initialized",
-		zap.String("camera_repo", "ready"),
-		zap.String("event_repo", "ready"),
-		zap.String("recording_repo", "ready"),
-		zap.String("user_repo", "ready"))
 
 	// Load cameras from database into camera manager
 	cameras, err := cameraRepo.List(ctx)

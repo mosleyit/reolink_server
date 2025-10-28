@@ -23,7 +23,7 @@ func (m *MockSubscriber) OnEvent(event *models.Event) error {
 
 func TestNewProcessor(t *testing.T) {
 	t.Run("with nil config uses defaults", func(t *testing.T) {
-		manager := camera.NewManager(nil)
+		manager := camera.NewManager(nil, nil)
 		processor := NewProcessor(manager, nil)
 
 		assert.NotNil(t, processor)
@@ -33,7 +33,7 @@ func TestNewProcessor(t *testing.T) {
 	})
 
 	t.Run("with custom config", func(t *testing.T) {
-		manager := camera.NewManager(nil)
+		manager := camera.NewManager(nil, nil)
 		config := &Config{
 			PollInterval:    10 * time.Second,
 			EventBufferSize: 500,
@@ -58,7 +58,7 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestProcessor_Subscribe(t *testing.T) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	processor := NewProcessor(manager, nil)
 
 	subscriber1 := &MockSubscriber{}
@@ -71,7 +71,7 @@ func TestProcessor_Subscribe(t *testing.T) {
 }
 
 func TestProcessor_PublishCameraEvent(t *testing.T) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	processor := NewProcessor(manager, nil)
 
 	subscriber := &MockSubscriber{}
@@ -107,7 +107,7 @@ func TestProcessor_PublishCameraEvent(t *testing.T) {
 }
 
 func TestProcessor_GetEventChannel(t *testing.T) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	processor := NewProcessor(manager, nil)
 
 	eventCh := processor.GetEventChannel()
@@ -115,7 +115,7 @@ func TestProcessor_GetEventChannel(t *testing.T) {
 }
 
 func TestProcessor_StartStop(t *testing.T) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	processor := NewProcessor(manager, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,7 +134,7 @@ func TestProcessor_StartStop(t *testing.T) {
 }
 
 func TestProcessor_PublishEvent(t *testing.T) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	config := &Config{
 		EventBufferSize: 10,
 	}
@@ -162,7 +162,7 @@ func TestProcessor_PublishEvent(t *testing.T) {
 }
 
 func TestProcessor_PublishEvent_FullChannel(t *testing.T) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	config := &Config{
 		EventBufferSize: 2,
 	}
@@ -191,7 +191,7 @@ func TestProcessor_PublishEvent_FullChannel(t *testing.T) {
 }
 
 func TestProcessor_NotifySubscribers(t *testing.T) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	processor := NewProcessor(manager, nil)
 
 	subscriber1 := &MockSubscriber{}
@@ -227,7 +227,7 @@ func TestConfig_Defaults(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkProcessor_PublishEvent(b *testing.B) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	processor := NewProcessor(manager, nil)
 
 	event := &models.Event{
@@ -249,7 +249,7 @@ func BenchmarkProcessor_PublishEvent(b *testing.B) {
 }
 
 func BenchmarkProcessor_NotifySubscribers(b *testing.B) {
-	manager := camera.NewManager(nil)
+	manager := camera.NewManager(nil, nil)
 	processor := NewProcessor(manager, nil)
 
 	// Add 10 subscribers

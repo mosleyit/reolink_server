@@ -56,10 +56,10 @@ type StreamService struct {
 
 // StreamServiceConfig holds configuration for the stream service
 type StreamServiceConfig struct {
-	HLSOutputDir      string
-	FFmpegPath        string
-	SessionTimeout    time.Duration
-	CleanupInterval   time.Duration
+	HLSOutputDir    string
+	FFmpegPath      string
+	SessionTimeout  time.Duration
+	CleanupInterval time.Duration
 }
 
 // NewStreamService creates a new stream service
@@ -175,6 +175,13 @@ func (s *StreamService) StartHLSStream(ctx context.Context, cameraID string, str
 		playlistPath,
 	)
 
+	// Capture stderr for error logging
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
 	// Start FFmpeg process
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -201,6 +208,22 @@ func (s *StreamService) StartHLSStream(ctx context.Context, cameraID string, str
 	s.sessionsMu.Lock()
 	s.sessions[sessionID] = session
 	s.sessionsMu.Unlock()
+
+	// Read FFmpeg stderr in background
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := stderrPipe.Read(buf)
+			if n > 0 {
+				logger.Debug("FFmpeg output",
+					zap.String("session_id", sessionID),
+					zap.String("output", string(buf[:n])))
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
 
 	// Monitor FFmpeg process
 	go func() {
@@ -255,7 +278,7 @@ func (s *StreamService) GetHLSSegment(sessionID, segmentName string) (string, er
 	s.sessionsMu.Unlock()
 
 	segmentPath := filepath.Join(s.hlsOutputDir, sessionID, segmentName)
-	
+
 	// Validate segment path to prevent directory traversal
 	if !filepath.HasPrefix(segmentPath, filepath.Join(s.hlsOutputDir, sessionID)) {
 		return "", fmt.Errorf("invalid segment path")
@@ -308,15 +331,15 @@ func (s *StreamService) cleanupExpiredSessions(interval time.Duration) {
 				logger.Info("Cleaning up expired session",
 					zap.String("session_id", sessionID),
 					zap.String("camera_id", session.CameraID))
-				
+
 				// Cancel context
 				if session.cancel != nil {
 					session.cancel()
 				}
-				
+
 				// Remove from map
 				delete(s.sessions, sessionID)
-				
+
 				// Cleanup directory
 				sessionDir := filepath.Join(s.hlsOutputDir, sessionID)
 				os.RemoveAll(sessionDir)
@@ -325,4 +348,3 @@ func (s *StreamService) cleanupExpiredSessions(interval time.Duration) {
 		s.sessionsMu.Unlock()
 	}
 }
-
