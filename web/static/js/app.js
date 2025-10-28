@@ -345,6 +345,49 @@ function closeModal() {
     if (modal) modal.remove();
 }
 
+// Start Stream
+function startStream(cameraId) {
+    const streamContainer = document.getElementById('streamContainer');
+
+    // Create video element for HLS stream
+    const videoHTML = `
+        <video id="liveStream" class="w-full h-full rounded" controls autoplay muted>
+            <source src="${API_BASE}/cameras/${cameraId}/stream/hls/playlist.m3u8" type="application/x-mpegURL">
+            Your browser does not support HLS streaming.
+        </video>
+        <p class="text-xs text-gray-500 mt-2">
+            Stream URL: ${API_BASE}/cameras/${cameraId}/stream/hls/playlist.m3u8
+        </p>
+    `;
+
+    streamContainer.innerHTML = videoHTML;
+
+    // Try to load HLS using native support or hls.js
+    const video = document.getElementById('liveStream');
+    const streamUrl = `${API_BASE}/cameras/${cameraId}/stream/hls/playlist.m3u8`;
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        video.src = streamUrl;
+    } else if (typeof Hls !== 'undefined') {
+        // Use hls.js for other browsers
+        const hls = new Hls();
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
+    } else {
+        streamContainer.innerHTML = `
+            <div class="text-center p-4">
+                <p class="text-red-600 mb-2">HLS streaming not supported in this browser</p>
+                <p class="text-sm text-gray-600">Try using Safari or install hls.js</p>
+                <a href="${API_BASE}/cameras/${cameraId}/stream/flv" target="_blank"
+                   class="inline-block mt-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
+                    Open FLV Stream
+                </a>
+            </div>
+        `;
+    }
+}
+
 // Get Snapshot
 async function getSnapshot(cameraId) {
     try {
