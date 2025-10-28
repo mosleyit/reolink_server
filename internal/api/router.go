@@ -62,7 +62,7 @@ func NewRouter(deps *RouterDependencies) *Router {
 	// Create handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	cameraHandler := handlers.NewCameraHandler(cameraService)
-	eventHandler := handlers.NewEventHandler(eventService)
+	eventHandler := handlers.NewEventHandler(eventService, cameraService)
 	recordingHandler := handlers.NewRecordingHandler(recordingService)
 	var eventStreamHandler *handlers.EventStreamHandler
 	if eventStreamService != nil {
