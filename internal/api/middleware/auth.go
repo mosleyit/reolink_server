@@ -33,21 +33,26 @@ type Claims struct {
 func Authenticate(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Extract token from Authorization header
+			var tokenString string
+
+			// Try to extract token from Authorization header first
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				utils.RespondError(w, http.StatusUnauthorized, "MISSING_TOKEN", "Authorization header is required", nil)
-				return
+			if authHeader != "" {
+				// Check Bearer prefix
+				parts := strings.Split(authHeader, " ")
+				if len(parts) != 2 || parts[0] != "Bearer" {
+					utils.RespondError(w, http.StatusUnauthorized, "INVALID_TOKEN_FORMAT", "Authorization header must be 'Bearer {token}'", nil)
+					return
+				}
+				tokenString = parts[1]
+			} else {
+				// For WebSocket connections, try query parameter
+				tokenString = r.URL.Query().Get("token")
+				if tokenString == "" {
+					utils.RespondError(w, http.StatusUnauthorized, "MISSING_TOKEN", "Authorization header or token query parameter is required", nil)
+					return
+				}
 			}
-
-			// Check Bearer prefix
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				utils.RespondError(w, http.StatusUnauthorized, "INVALID_TOKEN_FORMAT", "Authorization header must be 'Bearer {token}'", nil)
-				return
-			}
-
-			tokenString := parts[1]
 
 			// Parse and validate token
 			token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
@@ -106,4 +111,3 @@ func min(a, b int) int {
 	}
 	return b
 }
-
